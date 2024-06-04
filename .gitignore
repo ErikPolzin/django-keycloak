@@ -1,0 +1,11 @@
+.venv
+.vscode
+.mypy_cache
+.eggs
+
+build/
+**.egg-info
+**__pycache__
+
+*.sqlite3
+*.pyc
