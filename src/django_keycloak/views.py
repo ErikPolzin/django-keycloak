@@ -6,13 +6,12 @@ from django.contrib.auth import authenticate, login, logout
 from django.http.response import (
     HttpResponseBadRequest,
     HttpResponseServerError,
-    HttpResponseRedirect,
-    JsonResponse
+    HttpResponseRedirect
 )
 from django.urls.base import reverse
 from django.views.generic.base import RedirectView
 
-from .models import Nonce
+from .models import Nonce, Client
 
 
 logger = logging.getLogger(__name__)
@@ -21,27 +20,19 @@ logger = logging.getLogger(__name__)
 class Login(RedirectView):
     """Login View."""
 
-    def get(self, request, *args, **kwargs):
-        if request.realm is None:
-            return JsonResponse({"error": "No Realm configured"}, status=500)
-        return super().get(request, *args, **kwargs)
-
     def get_redirect_url(self, *args, **kwargs):
         """Redirects to the OIDC authorization URL."""
-
         nonce = Nonce.objects.create(
             redirect_uri=self.request.build_absolute_uri(
                 location=reverse("keycloak_login_complete")
             ),
             next_path=self.request.GET.get("next"),
         )
-
         self.request.session["oidc_state"] = str(nonce.state)
-
-        authorization_url = self.request.realm.openid_api_client.auth_url(
+        client = Client.get_default()
+        authorization_url = client.openid_client.auth_url(
             redirect_uri=nonce.redirect_uri, state=str(nonce.state)
         )
-
         return authorization_url
 
 
@@ -78,7 +69,8 @@ class Logout(RedirectView):
 
     def get_redirect_url(self, *args, **kwargs):
         if hasattr(self.request.user, "oidc_profile"):
-            self.request.realm.openid_api_client.logout(
+            client = Client.get_default()
+            client.openid_client.logout(
                 self.request.user.oidc_profile.refresh_token
             )
             self.request.user.oidc_profile.access_token = None

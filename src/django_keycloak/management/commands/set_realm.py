@@ -1,11 +1,6 @@
-import logging
-import getpass
-
 from django.core.management.base import BaseCommand
 
-from django_keycloak.models import Realm, Client, Server
-
-logger = logging.getLogger(__name__)
+from django_keycloak.models import Realm
 
 
 class Command(BaseCommand):
@@ -15,9 +10,5 @@ class Command(BaseCommand):
 
     def handle(self, realm_name: str, **kwargs):
         server_url = input("Keycloak Server URL: ")
-        server = Server.objects.create(url=server_url)
-        realm = Realm.objects.create(server=server, name=realm_name)
-        client_id = input("Client ID: ")
-        client_secret = getpass.getpass("Client Secret: ")
-        Client.objects.create(realm=realm, client_id=client_id, secret=client_secret)
-        logger.info("Created client for realm '%s'", realm_name)
+        realm = Realm.objects.create(server=server_url, name=realm_name)
+        self.stdout.write(f"Created client for realm '{realm.name}'")

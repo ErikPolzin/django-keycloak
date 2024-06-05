@@ -43,8 +43,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-
-    'django_keycloak'
+    'django_keycloak'  # <- ADD THIS
 ]
 
 MIDDLEWARE = [
@@ -55,8 +54,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-
-    'django_keycloak.middleware.BaseKeycloakMiddleware',
 ]
 
 ROOT_URLCONF = 'resource_provider_api.urls'
