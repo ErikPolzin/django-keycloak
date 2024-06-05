@@ -28,6 +28,7 @@ setup(
     ],
     install_requires=[
         'python-keycloak>=4.0.0',
+        'djangorestframework>3.0.0',
         'Django>=5.0.0',
     ],
     tests_require=[

@@ -5,6 +5,8 @@ charset-normalizer==3.3.2
 cryptography==42.0.7
 deprecation==2.1.0
 Django==5.0.6
+django-rest-framework==0.1.0
+djangorestframework==3.15.1
 idna==3.7
 jwcrypto==1.5.6
 packaging==24.0
