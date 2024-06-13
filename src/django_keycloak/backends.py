@@ -147,5 +147,5 @@ class KeycloakDRFAuthentication(BaseAuthentication):
         token_object = client.openid_client.decode_token(auth_parts[1])
         UserModel = get_user_model()
         uname = token_object.get("preferred_username", token_object["sub"])
-        user = UserModel(username=uname)
+        user, _ = UserModel.objects.get_or_create(username=uname)
         return (user, None)
