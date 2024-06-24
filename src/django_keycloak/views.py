@@ -11,7 +11,7 @@ from django.http.response import (
 from django.urls.base import reverse
 from django.views.generic.base import RedirectView
 
-from .models import Nonce, Client
+from .models import Nonce, OpenIdConnectProfile
 
 
 logger = logging.getLogger(__name__)
@@ -29,8 +29,7 @@ class Login(RedirectView):
             next_path=self.request.GET.get("next"),
         )
         self.request.session["oidc_state"] = str(nonce.state)
-        client = Client.get_default()
-        authorization_url = client.openid_client.auth_url(
+        authorization_url = OpenIdConnectProfile.client.auth_url(
             redirect_uri=nonce.redirect_uri, state=str(nonce.state)
         )
         return authorization_url
@@ -69,8 +68,7 @@ class Logout(RedirectView):
 
     def get_redirect_url(self, *args, **kwargs):
         if hasattr(self.request.user, "oidc_profile"):
-            client = Client.get_default()
-            client.openid_client.logout(
+            OpenIdConnectProfile.client.logout(
                 self.request.user.oidc_profile.refresh_token
             )
             self.request.user.oidc_profile.access_token = None

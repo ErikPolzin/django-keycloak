@@ -8,9 +8,8 @@ from django.db.models import Model
 from django.core.exceptions import ImproperlyConfigured
 from django.utils import timezone
 from keycloak.exceptions import KeycloakError
-from rest_framework.authentication import BaseAuthentication
 
-from .models import OpenIdConnectProfile, Client
+from .models import OpenIdConnectProfile
 
 
 logger = logging.getLogger(__name__)
@@ -62,7 +61,7 @@ class KeycloakAuthorizationBase:
         perm_method = getattr(settings, 'KEYCLOAK_PERMISSIONS_METHOD', "role")
 
         if perm_method == "role":
-            client_id = user_obj.oidc_profile.client.client_id
+            client_id = settings.KEYCLOAK_AUTH["CLIENT_ID"],
             role_data = rpt_decoded["resource_access"].get(client_id, {"roles": []})
             return {role for role in role_data["roles"]}
         elif perm_method == "resource":
@@ -104,9 +103,8 @@ class KeycloakAuthorizationCodeBackend(KeycloakAuthorizationBase):
                      code: str,
                      redirect_uri: str = "") -> User | None:
         """Authenticate a user from an access code."""
-        client = Client.get_default()
         try:
-            profile = OpenIdConnectProfile.from_code(client, code, redirect_uri)
+            profile = OpenIdConnectProfile.from_code(code, redirect_uri)
         except KeycloakError as e:
             logger.error("Error with sign-in: %s", e)
             return None
@@ -121,31 +119,9 @@ class KeycloakPasswordCredentialsBackend(KeycloakAuthorizationBase):
                      password: str,
                      redirect_uri: str = "") -> User:
         """Authenticate a user using username/password."""
-        client = Client.get_default()
         try:
-            profile = OpenIdConnectProfile.from_credentials(client, username, password, redirect_uri)
+            profile = OpenIdConnectProfile.from_credentials(username, password, redirect_uri)
         except KeycloakError as e:
             logger.error("Error with sign-in: %s", e)
             return None
         return profile.user
-
-
-class KeycloakDRFAuthentication(BaseAuthentication):
-    """Authentication backend for rest framework."""
-
-    def authenticate(self, request):
-        if hasattr(settings, "KEYCLOAK_CLIENT_API"):
-            client = Client.objects.get(client_id=settings.KEYCLOAK_CLIENT_API)
-        else:
-            client = Client.get_default()
-        auth = request.META.get('HTTP_AUTHORIZATION')
-        if not auth:
-            return None
-        auth_parts = auth.split()
-        if not len(auth_parts) > 1:
-            return None
-        token_object = client.openid_client.decode_token(auth_parts[1])
-        UserModel = get_user_model()
-        uname = token_object.get("preferred_username", token_object["sub"])
-        user, _ = UserModel.objects.get_or_create(username=uname)
-        return (user, None)

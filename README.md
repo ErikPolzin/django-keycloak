@@ -30,31 +30,32 @@ INSTALLED_APPS = [
 # For admin site authentication
 AUTHENTICATION_BACKENDS = [
     ...
-    'django_keycloak.auth.backends.KeycloakAuthorizationCodeBackend',
+    'django_keycloak.backends.KeycloakAuthorizationCodeBackend',
 ]
 AUTH_USER_MODEL = "django_keycloak.KeycloakUser"
 LOGIN_URL = 'keycloak_login'
-KEYCLOAK_CLIENT_DEFAULT = ...  # Client ID of the default keycloak client
+KEYCLOAK_AUTH = {
+    "URL": ...,
+    "REALM": ...,
+    "CLIENT_ID": ...,
+    "CLIENT_SECRET": ...
+}
 # If you're using django's REST framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'django_keycloak.backends.KeycloakDRFAuthentication',
+        'django_keycloak.authentication.KeycloakDRFAuthentication',
     ]
 }
-KEYCLOAK_CLIENT_API = ...  # Client ID of the API keycloak client
+DRF_KEYCLOAK_AUTH = {
+    "URL": ...,
+    "REALM": ...,
+    "CLIENT_ID": ...,
+    "CLIENT_SECRET": ...
+}
 ```
 3. Migrate changes:
 ```bash
 python manage.py migrate
-```
-4. Setup a realm:
-Run the custom Django command
-```bash
-python manage.py set_realm <realm_name>
-```
-and follow the prompts to setup a new realm. Make sure to add at least one client with
-```bash
-python manage.py add_client <realm_name>
 ```
 
 ## Roles and Permissions
