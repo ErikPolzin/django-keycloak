@@ -18,13 +18,6 @@ from .models import Nonce, OpenIdConnectProfile
 logger = logging.getLogger(__name__)
 
 
-def admin_login(request):
-    next_path = request.GET.get("next")
-    if next_path:
-        return redirect("keycloak_login", next=next_path)
-    return redirect("keycloak_login")
-
-
 class Login(RedirectView):
     """Login View."""
 
@@ -91,3 +84,8 @@ class Logout(RedirectView):
             return resolve_url(settings.LOGOUT_REDIRECT_URL)
 
         return reverse("keycloak_login")
+
+
+login_view = Login.as_view()
+login_complete_view = LoginComplete.as_view()
+logout_view = Logout.as_view()

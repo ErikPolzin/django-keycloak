@@ -33,7 +33,6 @@ AUTHENTICATION_BACKENDS = [
     'django_keycloak.backends.KeycloakAuthorizationCodeBackend',
 ]
 AUTH_USER_MODEL = "django_keycloak.KeycloakUser"
-LOGIN_URL = 'keycloak_login'
 KEYCLOAK_AUTH = {
     "URL": ...,
     "REALM": ...,
@@ -58,12 +57,12 @@ Open your app's `urls.py` file, ad add the following:
 ```python
 from django.contrib import admin
 from django.urls import path, include
-from django_keycloak.urls import admin_login
+from django_keycloak.views import admin_login
 
 urlpatterns = [
-    path("admin/login/", admin_login),
+    # This will override the default django login page
+    path("admin/", include("django_keycloak.urls")),
     path("admin/", admin.site.urls),
-    path("keycloak/", include("django_keycloak.urls")),
     ...
 ]
 ```

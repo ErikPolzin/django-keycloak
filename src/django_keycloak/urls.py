@@ -20,7 +20,7 @@ from . import views
 
 
 urlpatterns = [
-    path('login', views.Login.as_view(), name='keycloak_login'),
-    path('login-complete', views.LoginComplete.as_view(), name='keycloak_login_complete'),
-    path('logout', views.Logout.as_view(), name='keycloak_logout')
+    path('login/', views.login_view, name='keycloak_login'),
+    path('login-complete/', views.login_complete_view, name='keycloak_login_complete'),
+    path('logout/', views.logout_view, name='keycloak_logout')
 ]
