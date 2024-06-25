@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
 import uuid
 
@@ -103,7 +103,7 @@ class OpenIdConnectProfile(models.Model):
                 user=user,
                 defaults={
                     "sub": token_object["sub"],
-                    "expires_before": token_object["exp"],
+                    "expires_before": datetime.fromtimestamp(token_object["exp"] / 1e3),
                 },
             )
         return oidc_profile
