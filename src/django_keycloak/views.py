@@ -10,11 +10,19 @@ from django.http.response import (
 )
 from django.urls.base import reverse
 from django.views.generic.base import RedirectView
+from django.shortcuts import redirect
 
 from .models import Nonce, OpenIdConnectProfile
 
 
 logger = logging.getLogger(__name__)
+
+
+def admin_login(request):
+    next_path = request.GET.get("next")
+    if next_path:
+        return redirect("keycloak_login", next=next_path)
+    return redirect("keycloak_login")
 
 
 class Login(RedirectView):

@@ -53,7 +53,21 @@ DRF_KEYCLOAK_AUTH = {
     "CLIENT_SECRET": ...
 }
 ```
-3. Migrate changes:
+3. Include URLs
+Open your app's `urls.py` file, ad add the following:
+```python
+from django.contrib import admin
+from django.urls import path, include
+from django_keycloak.urls import admin_login
+
+urlpatterns = [
+    path("admin/login/", admin_login),
+    path("admin/", admin.site.urls),
+    path("keycloak/", include("django_keycloak.urls")),
+    ...
+]
+```
+4. Migrate changes:
 ```bash
 python manage.py migrate
 ```

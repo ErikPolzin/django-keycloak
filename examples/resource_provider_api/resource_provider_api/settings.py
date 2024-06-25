@@ -33,6 +33,18 @@ AUTHENTICATION_BACKENDS = [
 ]
 LOGIN_URL = 'keycloak_login'
 AUTH_USER_MODEL = "django_keycloak.KeycloakUser"
+KEYCLOAK_AUTH = {
+    "URL": "http://localhost:8001",
+    "REALM": "example-realm",
+    "CLIENT_ID": "example-backend-client",
+    "CLIENT_SECRET": "TU0Xsh0MjvvqiLkuAuNIbcK2QfqcvgaO"
+}
+DRF_KEYCLOAK_AUTH = {
+    "URL": "http://localhost:8001",
+    "REALM": "example-realm",
+    "CLIENT_ID": "example-frontend-client",
+    "CLIENT_SECRET": None
+}
 
 # Application definition
 
