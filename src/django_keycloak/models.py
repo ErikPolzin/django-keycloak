@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from django.db import models, transaction
 from django.conf import settings
 from django.utils import timezone
+from django.utils.timezone import make_aware
 from django.db import OperationalError
 
 from keycloak.exceptions import KeycloakError
@@ -126,8 +127,8 @@ class OpenIdConnectProfile(models.Model):
                     user=user,
                     defaults={
                         "sub": token["sub"],
-                        "expires_before": datetime.fromtimestamp(token["exp"]),
-                        "auth_time": datetime.fromtimestamp(token["auth_time"]),
+                        "expires_before": make_aware(datetime.fromtimestamp(token["exp"])),
+                        "auth_time": make_aware(datetime.fromtimestamp(token["auth_time"])),
                         "client_id": token["azp"],
                     },
                 )
