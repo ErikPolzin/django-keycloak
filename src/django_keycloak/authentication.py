@@ -1,18 +1,26 @@
+import logging
+
 from rest_framework.authentication import BaseAuthentication
-from django.contrib.auth import get_user_model
 from django.conf import settings
 from keycloak import KeycloakOpenID
+from .models import OpenIdConnectProfile
+
+logger = logging.getLogger(__file__)
+
+
+if "API" in settings.KEYCLOAK_CLIENTS:
+    API_CLIENT = KeycloakOpenID(
+        settings.KEYCLOAK_CLIENTS["API"]["URL"],
+        settings.KEYCLOAK_CLIENTS["API"]["REALM"],
+        settings.KEYCLOAK_CLIENTS["API"]["CLIENT_ID"],
+        settings.KEYCLOAK_CLIENTS["API"]["CLIENT_SECRET"],
+    )
+else:
+    API_CLIENT = None
 
 
 class KeycloakDRFAuthentication(BaseAuthentication):
     """Authentication backend for rest framework."""
-
-    client = KeycloakOpenID(
-        settings.DRF_KEYCLOAK_AUTH["URL"],
-        settings.DRF_KEYCLOAK_AUTH["REALM"],
-        settings.DRF_KEYCLOAK_AUTH["CLIENT_ID"],
-        settings.DRF_KEYCLOAK_AUTH["CLIENT_SECRET"],
-    )
 
     def authenticate(self, request):
         auth = request.META.get("HTTP_AUTHORIZATION")
@@ -21,8 +29,7 @@ class KeycloakDRFAuthentication(BaseAuthentication):
         auth_parts = auth.split()
         if not len(auth_parts) > 1:
             return None
-        token_object = self.client.decode_token(auth_parts[1])
-        UserModel = get_user_model()
-        uname = token_object.get("preferred_username", token_object["sub"])
-        user, _ = UserModel.objects.get_or_create(username=uname)
-        return (user, None)
+        profile = OpenIdConnectProfile.from_token(auth_parts[1], client=API_CLIENT)
+        if not profile:
+            return None
+        return (profile.user, profile)

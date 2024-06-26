@@ -7,33 +7,53 @@ from django.contrib.auth import get_user_model
 from django.db import models, transaction
 from django.conf import settings
 from django.utils import timezone
+from django.db import OperationalError
 
+from keycloak.exceptions import KeycloakError
 from keycloak import KeycloakOpenID
 
 logger = logging.getLogger(__name__)
 
 
+DEFAULT_CLIENT = KeycloakOpenID(
+    settings.KEYCLOAK_CLIENTS["DEFAULT"]["URL"],
+    settings.KEYCLOAK_CLIENTS["DEFAULT"]["REALM"],
+    settings.KEYCLOAK_CLIENTS["DEFAULT"]["CLIENT_ID"],
+    settings.KEYCLOAK_CLIENTS["DEFAULT"]["CLIENT_SECRET"],
+)
+
+
+def find_client(client_id: str) -> KeycloakOpenID:
+    """Find a client in settings with this client ID, or default."""
+    for client_data in settings.KEYCLOAK_CLIENTS.values():
+        if client_data["CLIENT_ID"] == client_id:
+            return KeycloakOpenID(
+                client_data["URL"],
+                client_data["REALM"],
+                client_data["CLIENT_ID"],
+                client_data["CLIENT_SECRET"],
+            )
+    raise ValueError(f"No client registered with ID '{client_id}'")
+
+
 class OpenIdConnectProfile(models.Model):
     """OpenID service account profile, usually associated with a client."""
 
+    auth_time = models.DateTimeField()
+    expires_before = models.DateTimeField()
     access_token = models.TextField(null=True)
-    expires_before = models.DateTimeField(null=True)
     refresh_token = models.TextField(null=True)
     refresh_expires_before = models.DateTimeField(null=True)
     sub = models.CharField(max_length=255, unique=True)
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, related_name="oidc_profile", on_delete=models.CASCADE
     )
-
-    client = KeycloakOpenID(
-        settings.KEYCLOAK_AUTH["URL"],
-        settings.KEYCLOAK_AUTH["REALM"],
-        settings.KEYCLOAK_AUTH["CLIENT_ID"],
-        settings.KEYCLOAK_AUTH["CLIENT_SECRET"],
-    )
+    client_id = models.CharField(max_length=100)
 
     @classmethod
-    def from_code(cls, code: str, redirect_uri: str = "") -> "OpenIdConnectProfile":
+    def from_code(
+        cls, code: str, redirect_uri: str = "", client=DEFAULT_CLIENT
+    ) -> "OpenIdConnectProfile | None":
         """Generate or update a OID profile from an authentication code.
 
         :param realm: Keycloak realm object.
@@ -41,20 +61,18 @@ class OpenIdConnectProfile(models.Model):
         :param redirect_uri
         :rtype: django_keycloak.models.OpenIdConnectProfile
         """
-        # Define "initiate_time" before getting the access token to calculate
-        # before which time it expires.
-        initiate_time = timezone.now()
-        token_response = cls.client.token(
+        token_response = client.token(
             code=code, redirect_uri=redirect_uri, grant_type="authorization_code"
         )
-        oidc_profile = cls.from_token_response(token_response)
-        oidc_profile.update_tokens(token_response, initiate_time)
-        return oidc_profile
+        profile = cls.from_token(token_response["access_token"], client=client)
+        if profile:
+            profile.update_tokens(token_response)
+        return profile
 
     @classmethod
     def from_credentials(
-        cls, username: str, password: str, redirect_uri: str = ""
-    ) -> "OpenIdConnectProfile":
+        cls, username: str, password: str, redirect_uri: str = "", client=DEFAULT_CLIENT
+    ) -> "OpenIdConnectProfile | None":
         """Generate or update a OID profile from user credentials.
 
         :param realm: Keycloak realm object.
@@ -63,104 +81,115 @@ class OpenIdConnectProfile(models.Model):
         :param redirect_uri
         :rtype: django_keycloak.models.OpenIdConnectProfile
         """
-        initiate_time = timezone.now()
-        token_response = cls.client.token(
+        token_response = client.token(
             username=username,
             password=password,
             redirect_uri=redirect_uri,
             grant_type="password",
         )
-        oidc_profile = cls.from_token_response(token_response)
-        oidc_profile.update_tokens(token_response, initiate_time)
-        return oidc_profile
+        profile = cls.from_token(token_response["access_token"], client=client)
+        if profile:
+            profile.update_tokens(token_response)
+        return profile
 
     @classmethod
-    def from_token_response(cls, token_response: dict) -> "OpenIdConnectProfile":
+    def from_token(
+        cls, encoded_token: str, client=DEFAULT_CLIENT
+    ) -> "OpenIdConnectProfile | None":
         """Generate an OIDC profile from an auth server response."""
-        token_response_key = (
-            "id_token" if "id_token" in token_response else "access_token"
-        )
-        token_object = cls.client.decode_token(token_response[token_response_key])
+        try:
+            token = client.decode_token(encoded_token)
+        except KeycloakError as e:
+            logger.error("Error decoding token: %s", e)
+            return None
         # Create the user and profile if they don't exist
         with transaction.atomic():
             User = get_user_model()
             email_field_name = User.get_email_field_name()
             admin_role = getattr(settings, "KEYCLOAK_ADMIN_ROLE", "admin")
-            is_superuser = admin_role in token_object.get("realm_access", {}).get(
-                "roles", []
-            )
-            user, _ = User.objects.update_or_create(
-                username=token_object.get("preferred_username", token_object["sub"]),
+            roles = token.get("realm_access", {}).get("roles", [])
+            uname = token.get("preferred_username", token["sub"])
+            # Use get_or_create not update_or_create, see note coming up. This
+            # does have the side-effect that the user's data won't syn with keycloak.
+            user, _ = User.objects.prefetch_related("oidc_profile").get_or_create(
+                username=uname,
                 defaults={
-                    email_field_name: token_object.get("email", ""),
-                    "first_name": token_object.get("given_name", ""),
-                    "last_name": token_object.get("family_name", ""),
-                    "is_superuser": is_superuser,
-                    "is_staff": is_superuser,
+                    email_field_name: token.get("email", ""),
+                    "first_name": token.get("given_name", ""),
+                    "last_name": token.get("family_name", ""),
+                    "is_superuser": admin_role in roles,
+                    "is_staff": admin_role in roles,
                 },
             )
-            oidc_profile, _ = cls.objects.get_or_create(
-                user=user,
-                defaults={
-                    "sub": token_object["sub"],
-                    "expires_before": datetime.fromtimestamp(token_object["exp"] / 1e3),
-                },
-            )
+            try:
+                oidc_profile, _ = cls.objects.update_or_create(
+                    user=user,
+                    defaults={
+                        "sub": token["sub"],
+                        "expires_before": datetime.fromtimestamp(token["exp"]),
+                        "auth_time": datetime.fromtimestamp(token["auth_time"]),
+                        "client_id": token["azp"],
+                    },
+                )
+            except OperationalError:
+                # HACK: update_or_create seems to lock the OpenIDConnectProfile table,
+                # so if two request come in one after the other with the default sqlite
+                # database, django sometimes throws a 'database is locked' exception.
+                # For now, we just assume the profile hasn't changed.
+                oidc_profile = user.oidc_profile
         return oidc_profile
 
     @property
-    def is_active(self) -> bool:
-        """Check whether this profile has expired."""
-        if not self.access_token or not self.expires_before:
-            return False
-        return self.expires_before > timezone.now()
+    def client(self) -> KeycloakOpenID:
+        """Get the OpenID client for this profile."""
+        return find_client(self.client_id)
 
     @property
-    def jwt(self):
-        """JS Web Token."""
-        if not self.is_active:
-            return None
-        return self.client.decode_token(self.access_token)
+    def can_refresh(self) -> bool:
+        """Check whether the profile can refresh its token."""
+        return (
+            self.refresh_token is not None and self.refresh_expires_before is not None
+        )
 
-    def update_tokens(self, token_response, initiate_time):
+    def is_expired(self) -> bool:
+        """Check whether this profile's token is currently expired."""
+        return timezone.now() > self.expires_before
+
+    def refresh_expired(self) -> bool:
+        """Check whether the profile's refresh token is expired."""
+        # refresh_expired() will return False if there is no refresh token
+        if not self.can_refresh:
+            return False
+        return timezone.now() > self.refresh_expires_before
+
+    def update_tokens(self, token_response: dict) -> None:
         """Update tokens with data fetched from the auth server.
 
         :param token_response: Server response
-        :param initiate_time: Query init time
         """
-        expires_before = initiate_time + timedelta(seconds=token_response["expires_in"])
-        refresh_expires_before = initiate_time + timedelta(
+        self.access_token = token_response["access_token"]
+        refresh_expires_before = self.auth_time + timedelta(
             seconds=token_response["refresh_expires_in"]
         )
-        # Update the OIDC profile
-        self.access_token = token_response["access_token"]
-        self.expires_before = expires_before
         self.refresh_token = token_response["refresh_token"]
         self.refresh_expires_before = refresh_expires_before
         self.save()
 
     def get_active_access_token(self) -> str | None:
         """Get the access token, refreshed if it has expired."""
-        initiate_time = timezone.now()
-        if (
-            self.refresh_expires_before is None
-            or initiate_time > self.refresh_expires_before
-        ):
+        if not self.can_refresh or self.refresh_expired():
             return None
-        if initiate_time > self.expires_before:
+        if self.is_expired():
             # Refresh token
-            token_response = self.client.refresh_token(refresh_token=self.refresh_token)
-            self.update_tokens(
-                token_response=token_response, initiate_time=initiate_time
-            )
+            token_response = self.client.refresh_token(self.refresh_token)
+            self.update_tokens(token_response)
         return self.access_token
 
     def entitlement(self) -> dict:
         """Fetch permissions for this realm's client."""
-        access_token = self.get_active_access_token()
-        resource_id = settings.KEYCLOAK_AUTH["CLIENT_ID"]
+        resource_id = self.client.client_id
         # BUG: This fails with coded 405: Method Not Allowed?
-        rpt = self.client.entitlement(access_token, resource_id)["rpt"]
+        rpt = self.client.entitlement(self.access_token, resource_id)["rpt"]
         rpt_decoded = self.client.decode_token(rpt)
         return rpt_decoded
 

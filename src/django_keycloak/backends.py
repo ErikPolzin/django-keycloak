@@ -29,9 +29,9 @@ class KeycloakAuthorizationBase:
             user = UserModel.objects.get(pk=user_id)
         except UserModel.DoesNotExist:
             return None
-        if user.oidc_profile.refresh_expires_before > timezone.now():
-            return user
-        return None
+        if user.oidc_profile.is_expired():
+            return None
+        return user
 
     def get_all_permissions(self, user_obj: User, obj: Model | None = None) -> set[str]:
         """Get and cache all permissions for a given user.
