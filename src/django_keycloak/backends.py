@@ -29,7 +29,10 @@ class KeycloakAuthorizationBase:
             user = UserModel.objects.get(pk=user_id)
         except UserModel.DoesNotExist:
             return None
-        if user.oidc_profile.is_expired():
+        try:
+            if user.oidc_profile.is_expired():
+                return None
+        except OpenIdConnectProfile.DoesNotExist:
             return None
         return user
 

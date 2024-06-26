@@ -80,7 +80,8 @@ class LoginComplete(RedirectView):
         user = authenticate(
             request=request, code=request.GET["code"], redirect_uri=nonce.redirect_uri
         )
-        login(request, user)
+        if user and user.is_authenticated:
+            login(request, user)
         nonce.delete()
         return HttpResponseRedirect(nonce.next_path or "/")
 
