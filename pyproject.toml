@@ -31,8 +31,8 @@ Homepage = "https://github.com/ErikPolzin/django-keycloak"
 Issues = "https://github.com/ErikPolzin/django-keycloak/issues"
 
 [tool.bumpver]
-current_version = "2024.1001-alpha"
-version_pattern = "YYYY.BUILD[-TAG]"
+current_version = "0.0.2"
+version_pattern = "MAJOR.MINOR.PATCH"
 commit_message = "bump version {old_version} -> {new_version}"
 tag_message = "{new_version}"
 tag_scope = "default"
