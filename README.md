@@ -17,7 +17,7 @@ TODO: Support resource & role permissions
 
 1. Install via pip:
 ```bash
-pip install git+https://github.com/ErikPolzin/django-keycloak.git
+pip install django-keycloak-admin
 ```
 2. Configure settings:
 In your application's settings, add the following lines:
