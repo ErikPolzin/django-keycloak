@@ -17,14 +17,12 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import path, include
-from django.shortcuts import redirect
 
 from . import views
 
 urlpatterns = [
-    path("admin/login/", lambda _: redirect("keycloak_login")),
+    path("admin/", include("django_keycloak.urls")),
     path("admin/", admin.site.urls),
-    path("keycloak/", include("django_keycloak.urls")),
     path("api/end-point/", views.api_end_point),
     path("api/authenticated-end-point/", views.authenticated_end_point),
 ]

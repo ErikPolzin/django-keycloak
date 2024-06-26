@@ -112,7 +112,7 @@ class OpenIdConnectProfile(models.Model):
             uname = token.get("preferred_username", token["sub"])
             # Use get_or_create not update_or_create, see note coming up. This
             # does have the side-effect that the user's data won't syn with keycloak.
-            user, _ = User.objects.prefetch_related("oidc_profile").get_or_create(
+            user, created_user = User.objects.prefetch_related("oidc_profile").get_or_create(
                 username=uname,
                 defaults={
                     email_field_name: token.get("email", ""),
@@ -122,14 +122,22 @@ class OpenIdConnectProfile(models.Model):
                     "is_staff": admin_role in roles,
                 },
             )
+            if created_user:
+                logger.info("Created new user '%s' from keycloak server", user.username)
             try:
                 oidc_profile, _ = cls.objects.update_or_create(
                     user=user,
                     defaults={
                         "sub": token["sub"],
                         "expires_before": make_aware(datetime.fromtimestamp(token["exp"])),
-                        "auth_time": make_aware(datetime.fromtimestamp(token["auth_time"])),
+                        "auth_time": make_aware(datetime.fromtimestamp(token["iat"])),
                         "client_id": token["azp"],
+                        # Make sure to reset these values - if this profile has been generated
+                        # from an api access token, refreshing will not be available. If it has
+                        # been generated from an authorization_code or username/password, the
+                        # refresh token will be updated after creation.
+                        "refresh_token": None,
+                        "refresh_expires_before": None
                     },
                 )
             except OperationalError:
@@ -139,6 +147,10 @@ class OpenIdConnectProfile(models.Model):
                 # For now, we just assume the profile hasn't changed.
                 oidc_profile = user.oidc_profile
         return oidc_profile
+
+    def __str__(self) -> str:
+        """Human readable description of an OIDC profile."""
+        return f"OpenID profile for {self.user.username} [exp:{self.expires_before}]"
 
     @property
     def client(self) -> KeycloakOpenID:
@@ -176,15 +188,16 @@ class OpenIdConnectProfile(models.Model):
         self.refresh_expires_before = refresh_expires_before
         self.save()
 
-    def get_active_access_token(self) -> str | None:
-        """Get the access token, refreshed if it has expired."""
+    def refresh_if_expired(self) -> bool:
+        """Refresh the access token, if expired and refresh is possible."""
         if not self.can_refresh or self.refresh_expired():
-            return None
+            return False
         if self.is_expired():
             # Refresh token
             token_response = self.client.refresh_token(self.refresh_token)
             self.update_tokens(token_response)
-        return self.access_token
+            logger.info("Refreshed auth token %s", self.sub)
+        return True
 
     def entitlement(self) -> dict:
         """Fetch permissions for this realm's client."""

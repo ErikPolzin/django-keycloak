@@ -6,7 +6,6 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import User
 from django.db.models import Model
 from django.core.exceptions import ImproperlyConfigured
-from django.utils import timezone
 from keycloak.exceptions import KeycloakError
 
 from .models import OpenIdConnectProfile
@@ -30,7 +29,8 @@ class KeycloakAuthorizationBase:
         except UserModel.DoesNotExist:
             return None
         try:
-            if user.oidc_profile.is_expired():
+            valid = user.oidc_profile.refresh_if_expired()
+            if not valid:
                 return None
         except OpenIdConnectProfile.DoesNotExist:
             return None
