@@ -32,24 +32,27 @@ AUTHENTICATION_BACKENDS = [
     ...
     'django_keycloak.backends.KeycloakAuthorizationCodeBackend',
 ]
-AUTH_USER_MODEL = "django_keycloak.KeycloakUser"
-KEYCLOAK_AUTH = {
-    "URL": ...,
-    "REALM": ...,
-    "CLIENT_ID": ...,
-    "CLIENT_SECRET": ...
+AUTH_USER_MODEL = "django_keycloak.KeycloakUser"  # Optional
+KEYCLOAK_CLIENTS = {
+    "DEFAULT": {
+        "URL": ...,
+        "REALM": "example-realm",
+        "CLIENT_ID": "example-backend-client",
+        "CLIENT_SECRET": "*************************",
+    },
+    # If you're using django's REST framework
+    "API": {
+        "URL": "http://localhost:8001",
+        "REALM": "example-realm",
+        "CLIENT_ID": "example-frontend-client",
+        "CLIENT_SECRET": None,  # Typically a public client
+    },
 }
-# If you're using django's REST framework
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'django_keycloak.authentication.KeycloakDRFAuthentication',
     ]
-}
-DRF_KEYCLOAK_AUTH = {
-    "URL": ...,
-    "REALM": ...,
-    "CLIENT_ID": ...,
-    "CLIENT_SECRET": ...
 }
 ```
 3. Include URLs
