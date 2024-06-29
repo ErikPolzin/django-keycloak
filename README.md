@@ -76,7 +76,9 @@ python manage.py migrate
 
 ## Roles and Permissions
 
-Syncing permissions with Keycloak isn't currently supported, but django_keycloak is able to recognise a special 'superuser' role defined by `KEYCLOAK_ADMIN_ROLE` defined in settings (and defaulting to 'admin'). If users have this role, they are classified a django superuser. Without this role, they may not be able to access the admin site.
+Roles assigned on keycloak are represented as Django groups, so a user with an 'example' role on the keycloak server will be added to an 'example' group in the Django app. An administrator can configure permissions for the group in the Django admin site.
+
+There is also a special 'superuser' role defined by `KEYCLOAK_ADMIN_ROLE` in settings (and defaulting to 'admin'). If users have this role, they are classified a Django superuser, with all permissions automatically assigned.
 
 ## Examples
 

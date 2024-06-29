@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 import logging
 import uuid
 
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, Group
 from django.contrib.auth import get_user_model
 from django.db import models, transaction
 from django.conf import settings
@@ -107,9 +107,17 @@ class OpenIdConnectProfile(models.Model):
         with transaction.atomic():
             User = get_user_model()
             email_field_name = User.get_email_field_name()
-            admin_role = getattr(settings, "KEYCLOAK_ADMIN_ROLE", "admin")
-            roles = token.get("realm_access", {}).get("roles", [])
             uname = token.get("preferred_username", token["sub"])
+            admin_role = getattr(settings, "KEYCLOAK_ADMIN_ROLE", "admin")
+            roles = set(token.get("realm_access", {}).get("roles", []))
+            # Create new groups if the roles received from keycloak are out of
+            # sync with the groups stored in django's database.
+            current_roles = set(
+                Group.objects.filter(name__in=roles).values_list("name", flat=True)
+            )
+            new_roles = roles.difference(current_roles)
+            if new_roles:
+                Group.objects.bulk_create([Group(name=n) for n in new_roles])
             # Use get_or_create not update_or_create, see note coming up. This
             # does have the side-effect that the user's data won't syn with keycloak.
             user, created_user = User.objects.prefetch_related("oidc_profile").get_or_create(
@@ -122,6 +130,7 @@ class OpenIdConnectProfile(models.Model):
                     "is_staff": admin_role in roles,
                 },
             )
+            user.groups.set(Group.objects.filter(name__in=roles))
             if created_user:
                 logger.info("Created new user '%s' from keycloak server", user.username)
             try:
@@ -137,7 +146,7 @@ class OpenIdConnectProfile(models.Model):
                         # been generated from an authorization_code or username/password, the
                         # refresh token will be updated after creation.
                         "refresh_token": None,
-                        "refresh_expires_before": None
+                        "refresh_expires_before": None,
                     },
                 )
             except OperationalError:
