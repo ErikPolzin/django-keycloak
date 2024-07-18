@@ -223,7 +223,3 @@ class Nonce(models.Model):
     state = models.UUIDField(default=uuid.uuid4, unique=True)
     redirect_uri = models.CharField(max_length=255)
     next_path = models.CharField(max_length=255, null=True)
-
-
-class KeycloakUser(AbstractUser):
-    """A keycloak user copy stored in the database."""

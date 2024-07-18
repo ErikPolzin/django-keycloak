@@ -29,7 +29,6 @@ ALLOWED_HOSTS = []
 
 # Keycloak config
 AUTHENTICATION_BACKENDS = ["django_keycloak.backends.KeycloakAuthorizationCodeBackend"]
-AUTH_USER_MODEL = "django_keycloak.KeycloakUser"
 KEYCLOAK_CLIENTS = {
     "DEFAULT": {
         "URL": "http://localhost:8001",

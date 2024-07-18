@@ -32,7 +32,6 @@ AUTHENTICATION_BACKENDS = [
     ...
     'django_keycloak.backends.KeycloakAuthorizationCodeBackend',
 ]
-AUTH_USER_MODEL = "django_keycloak.KeycloakUser"  # Optional
 KEYCLOAK_CLIENTS = {
     "DEFAULT": {
         "URL": ...,
