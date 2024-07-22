@@ -1,10 +1,11 @@
 from datetime import datetime, timedelta
+import time
 import logging
 import uuid
 
-from django.contrib.auth.models import AbstractUser, Group
+from django.contrib.auth.models import Group
 from django.contrib.auth import get_user_model
-from django.db import models, transaction
+from django.db import models, transaction, connection
 from django.conf import settings
 from django.utils import timezone
 from django.utils.timezone import make_aware
@@ -35,6 +36,35 @@ def find_client(client_id: str) -> KeycloakOpenID:
                 client_data["CLIENT_SECRET"],
             )
     raise ValueError(f"No client registered with ID '{client_id}'")
+
+
+def try_while_locked(n, retry_wait=1):
+    """Retry a function n times if it throws an operational error.
+
+    In particular, update_or_create seems to lock the table for writes,
+    so if two requests come in one after the other with the default sqlite
+    database, django throws a 'database is locked' exception.
+    """
+
+    def outer(f):
+        """Function wrapper."""
+
+        # This only seems to be an issue with sqlite
+        if connection.vendor != "sqlite":
+            return f
+
+        def inner(*args, **kwargs):
+            for i in range(n):
+                try:
+                    return f(*args, **kwargs)
+                except OperationalError as oe:
+                    logger.warning("(%s) Encountered an operational error: %s, retrying", i, oe)
+                    time.sleep(retry_wait)
+            raise OperationalError("Encountered too many operational errors!")
+
+        return inner
+
+    return outer
 
 
 class OpenIdConnectProfile(models.Model):
@@ -94,6 +124,7 @@ class OpenIdConnectProfile(models.Model):
         return profile
 
     @classmethod
+    @try_while_locked(3)
     def from_token(
         cls, encoded_token: str, client=DEFAULT_CLIENT
     ) -> "OpenIdConnectProfile | None":
@@ -120,7 +151,9 @@ class OpenIdConnectProfile(models.Model):
                 Group.objects.bulk_create([Group(name=n) for n in new_roles])
             # Use get_or_create not update_or_create, see note coming up. This
             # does have the side-effect that the user's data won't syn with keycloak.
-            user, created_user = User.objects.prefetch_related("oidc_profile").get_or_create(
+            user, created_user = User.objects.prefetch_related(
+                "oidc_profile"
+            ).get_or_create(
                 username=uname,
                 defaults={
                     email_field_name: token.get("email", ""),
@@ -133,28 +166,21 @@ class OpenIdConnectProfile(models.Model):
             user.groups.set(Group.objects.filter(name__in=roles))
             if created_user:
                 logger.info("Created new user '%s' from keycloak server", user.username)
-            try:
-                oidc_profile, _ = cls.objects.update_or_create(
-                    user=user,
-                    defaults={
-                        "sub": token["sub"],
-                        "expires_before": make_aware(datetime.fromtimestamp(token["exp"])),
-                        "auth_time": make_aware(datetime.fromtimestamp(token["iat"])),
-                        "client_id": token["azp"],
-                        # Make sure to reset these values - if this profile has been generated
-                        # from an api access token, refreshing will not be available. If it has
-                        # been generated from an authorization_code or username/password, the
-                        # refresh token will be updated after creation.
-                        "refresh_token": None,
-                        "refresh_expires_before": None,
-                    },
-                )
-            except OperationalError:
-                # HACK: update_or_create seems to lock the OpenIDConnectProfile table,
-                # so if two request come in one after the other with the default sqlite
-                # database, django sometimes throws a 'database is locked' exception.
-                # For now, we just assume the profile hasn't changed.
-                oidc_profile = user.oidc_profile
+            oidc_profile, _ = cls.objects.update_or_create(
+                user=user,
+                defaults={
+                    "sub": token["sub"],
+                    "expires_before": make_aware(datetime.fromtimestamp(token["exp"])),
+                    "auth_time": make_aware(datetime.fromtimestamp(token["iat"])),
+                    "client_id": token["azp"],
+                    # Make sure to reset these values - if this profile has been generated
+                    # from an api access token, refreshing will not be available. If it has
+                    # been generated from an authorization_code or username/password, the
+                    # refresh token will be updated after creation.
+                    "refresh_token": None,
+                    "refresh_expires_before": None,
+                },
+            )
         return oidc_profile
 
     def __str__(self) -> str:
