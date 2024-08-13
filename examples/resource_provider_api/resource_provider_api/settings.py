@@ -42,6 +42,10 @@ KEYCLOAK_CLIENTS = {
         "CLIENT_ID": "example-frontend-client",
         "CLIENT_SECRET": None,
     },
+    "ADMIN": {
+        "USERNAME": "admin",
+        "PASSWORD": "admin",
+    },
 }
 
 # Application definition

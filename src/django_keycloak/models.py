@@ -13,16 +13,9 @@ from django.db import OperationalError
 
 from keycloak.exceptions import KeycloakError
 from keycloak import KeycloakOpenID
+from .tools import DEFAULT_CLIENT
 
 logger = logging.getLogger(__name__)
-
-
-DEFAULT_CLIENT = KeycloakOpenID(
-    settings.KEYCLOAK_CLIENTS["DEFAULT"]["URL"],
-    settings.KEYCLOAK_CLIENTS["DEFAULT"]["REALM"],
-    settings.KEYCLOAK_CLIENTS["DEFAULT"]["CLIENT_ID"],
-    settings.KEYCLOAK_CLIENTS["DEFAULT"]["CLIENT_SECRET"],
-)
 
 
 def find_client(client_id: str) -> KeycloakOpenID:

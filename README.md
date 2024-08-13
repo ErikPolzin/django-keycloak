@@ -41,11 +41,15 @@ KEYCLOAK_CLIENTS = {
     },
     # If you're using django's REST framework
     "API": {
-        "URL": "http://localhost:8001",
+        "URL": ...,
         "REALM": "example-realm",
         "CLIENT_ID": "example-frontend-client",
         "CLIENT_SECRET": None,  # Typically a public client
     },
+    "ADMIN": {
+        "USERNAME": "admin",
+        "PASSWORD": ...,
+    }
 }
 
 REST_FRAMEWORK = {
