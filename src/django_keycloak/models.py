@@ -142,11 +142,11 @@ class OpenIdConnectProfile(models.Model):
             new_roles = roles.difference(current_roles)
             if new_roles:
                 Group.objects.bulk_create([Group(name=n) for n in new_roles])
-            # Use get_or_create not update_or_create, see note coming up. This
-            # does have the side-effect that the user's data won't syn with keycloak.
+            # update_or_create causes issues with sqlite when handling simultaneous
+            # requests, but we do need to keep the user data in sync.
             user, created_user = User.objects.prefetch_related(
                 "oidc_profile"
-            ).get_or_create(
+            ).update_or_create(
                 username=uname,
                 defaults={
                     email_field_name: token.get("email", ""),
